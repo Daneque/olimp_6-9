@@ -3,10 +3,13 @@ import sys
 import os
 from pathlib import Path
 
+
 def dist2(a, b):
     dx = a[0] - b[0]
     dy = a[1] - b[1]
     return dx * dx + dy * dy
+
+
 
 def merge_by_y(left, right):
     res = []
@@ -21,6 +24,8 @@ def merge_by_y(left, right):
     res.extend(left[i:])
     res.extend(right[j:])
     return res
+
+
 
 def closest_pair(px, py):
     n = len(px)
@@ -49,7 +54,7 @@ def closest_pair(px, py):
     d_left, sy_left = closest_pair(qx, qy)
     d_right, sy_right = closest_pair(rx, ry)
 
-    d = d_left if d_left < d_right else d_right
+    d = min(d_left, d_right)
     sy = merge_by_y(sy_left, sy_right)
 
     strip = []
@@ -72,6 +77,8 @@ def closest_pair(px, py):
 
     return d, sy
 
+
+
 def solve_instance(points):
     pts = [(x, y, i) for i, (x, y) in enumerate(points)]
     pts.sort(key=lambda p: (p[0], p[1]))
@@ -84,6 +91,8 @@ def solve_instance(points):
     ans, _ = closest_pair(pts, py)
     return ans
 
+
+
 def predefined_tests():
     return [
         [(0, 0), (3, 4)],
@@ -92,6 +101,8 @@ def predefined_tests():
         [(-1, -1), (1, 1), (2, 2), (3, 3)],
         [(0, 0), (1000000000, 1000000000), (-1000000000, -1000000000)],
     ]
+
+
 
 def random_points(n, coord_limit=10**6, allow_duplicates=False):
     pts = []
@@ -104,43 +115,145 @@ def random_points(n, coord_limit=10**6, allow_duplicates=False):
             used.add((x, y))
     return pts
 
-def generate_tests(count=10, out_path=Path("./tests")):
-    tests = predefined_tests()
 
-    while len(tests) < count:
-        t = len(tests) + 1
-        if t % 4 == 0:
-            n = random.randint(2, 2000)
-            pts = random_points(n, allow_duplicates=True)
-        elif t % 4 == 1:
-            n = random.randint(2, 3000)
-            pts = [(i, random.randint(-100, 100)) for i in range(n)]
-        elif t % 4 == 2:
-            n = random.randint(2, 3000)
-            pts = random_points(n)
-        else:
-            n = random.randint(2, 5000)
-            pts = [(random.randint(-10**9, 10**9), random.randint(-10**9, 10**9)) for _ in range(n)]
-        tests.append(pts)
 
-    for i, points in enumerate(tests[:count], start=1):
-        ans = solve_instance(points)
+def line_points(n, y_limit):
+    return [(i, random.randint(-y_limit, y_limit)) for i in range(n)]
 
-        lines = [str(len(points))]
-        lines.extend(f"{x} {y}" for x, y in points)
-        inp = "\n".join(lines)
-        out = str(ans)
 
-        with open(out_path / f"{i}.in", "w", encoding="utf-8") as f:
-            f.write(inp)
-        with open(out_path / f"{i}.out", "w", encoding="utf-8") as f:
-            f.write(out)
+
+def cluster_points(n, center_limit, spread, allow_duplicates=False):
+    cx = random.randint(-center_limit, center_limit)
+    cy = random.randint(-center_limit, center_limit)
+    pts = []
+    used = set()
+    while len(pts) < n:
+        x = cx + random.randint(-spread, spread)
+        y = cy + random.randint(-spread, spread)
+        if allow_duplicates or (x, y) not in used:
+            pts.append((x, y))
+            used.add((x, y))
+    return pts
+
+
+
+def easy_test(idx):
+    kind = idx % 4
+    if kind == 0:
+        n = random.randint(2, 50)
+        return random_points(n, coord_limit=100, allow_duplicates=False)
+    if kind == 1:
+        n = random.randint(2, 120)
+        return line_points(n, y_limit=20)
+    if kind == 2:
+        n = random.randint(2, 80)
+        return random_points(n, coord_limit=200, allow_duplicates=True)
+    n = random.randint(2, 150)
+    return cluster_points(n, center_limit=100, spread=10, allow_duplicates=False)
+
+
+
+def medium_test(idx):
+    kind = idx % 5
+    if kind == 0:
+        n = random.randint(500, 1500)
+        return random_points(n, coord_limit=10**5, allow_duplicates=False)
+    if kind == 1:
+        n = random.randint(500, 2000)
+        return line_points(n, y_limit=10**3)
+    if kind == 2:
+        n = random.randint(500, 1500)
+        return random_points(n, coord_limit=10**5, allow_duplicates=True)
+    if kind == 3:
+        n = random.randint(700, 1800)
+        return cluster_points(n, center_limit=10**5, spread=200, allow_duplicates=False)
+    n = random.randint(600, 1600)
+    pts1 = cluster_points(n // 2, center_limit=10**5, spread=100, allow_duplicates=False)
+    pts2 = cluster_points(n - n // 2, center_limit=10**5, spread=100, allow_duplicates=False)
+    return pts1 + pts2
+
+
+
+def hard_test(idx):
+    kind = idx % 6
+    if kind == 0:
+        n = random.randint(3500, 5000)
+        return random_points(n, coord_limit=10**9, allow_duplicates=False)
+    if kind == 1:
+        n = random.randint(3500, 5000)
+        return random_points(n, coord_limit=10**9, allow_duplicates=True)
+    if kind == 2:
+        n = random.randint(3500, 5000)
+        return line_points(n, y_limit=10**6)
+    if kind == 3:
+        n = random.randint(3500, 5000)
+        return [(random.randint(-10**9, 10**9), random.randint(-10**9, 10**9)) for _ in range(n)]
+    if kind == 4:
+        n = random.randint(3500, 5000)
+        return cluster_points(n, center_limit=10**9, spread=10**4, allow_duplicates=False)
+    n = random.randint(3500, 5000)
+    pts1 = cluster_points(n // 2, center_limit=10**9, spread=10**3, allow_duplicates=False)
+    pts2 = cluster_points(n - n // 2, center_limit=10**9, spread=10**3, allow_duplicates=False)
+    return pts1 + pts2
+
+
+
+def write_test(test_id, points, out_path):
+    ans = solve_instance(points)
+
+    lines = [str(len(points))]
+    lines.extend(f"{x} {y}" for x, y in points)
+    inp = "\n".join(lines)
+    out = str(ans)
+
+    with open(out_path / f"{test_id}.in", "w", encoding="utf-8") as f:
+        f.write(inp)
+    with open(out_path / f"{test_id}.out", "w", encoding="utf-8") as f:
+        f.write(out)
+
+
+
+def generate_tests(easy_count, medium_count, hard_count, out_path=Path("./tests")):
+    out_path.mkdir(parents=True, exist_ok=True)
+
+    test_id = 1
+
+    base = predefined_tests()
+    for points in base[:easy_count]:
+        write_test(test_id, points, out_path)
+        test_id += 1
+
+    generated_easy = max(0, easy_count - min(easy_count, len(base)))
+    for i in range(generated_easy):
+        write_test(test_id, easy_test(i), out_path)
+        test_id += 1
+
+    for i in range(medium_count):
+        write_test(test_id, medium_test(i), out_path)
+        test_id += 1
+
+    for i in range(hard_count):
+        write_test(test_id, hard_test(i), out_path)
+        test_id += 1
+
+
+
+def main():
+    if len(sys.argv) != 5:
+        print("Использование: python generate_tests_levels.py <easy_count> <medium_count> <hard_count> <out_dir>")
+        sys.exit(1)
+
+    easy_count = int(sys.argv[1])
+    medium_count = int(sys.argv[2])
+    hard_count = int(sys.argv[3])
+    out_path = Path(sys.argv[4])
+
+    if easy_count < 0 or medium_count < 0 or hard_count < 0:
+        print("Количество тестов должно быть неотрицательным")
+        sys.exit(1)
+
+    generate_tests(easy_count, medium_count, hard_count, out_path)
+
 
 if __name__ == "__main__":
-    out_path = Path(sys.argv[2])
-    num_tests = int(sys.argv[1])
-
-    if not out_path.exists():
-        os.mkdir(out_path)
-
-    generate_tests(num_tests, out_path)
+    main()

@@ -1,45 +1,14 @@
 #!/usr/bin/env python3
 import sys
-import os
-import random
 import math
+import random
+from pathlib import Path
 
-def cross(o, a, b):
-    # векторное произведение OA x OB
-    return (a[0] - o[0]) * (b[1] - o[1]) - (a[1] - o[1]) * (b[0] - o[0])
 
-def convex_hull(points):
-    # монотонная цепь, возвращает вершины выпуклой оболочки
-    pts = sorted(set(points))
-    if len(pts) <= 1:
-        return pts
+rnd = random.Random(987654)
 
-    lower = []
-    for p in pts:
-        while len(lower) >= 2 and cross(lower[-2], lower[-1], p) <= 0:
-            lower.pop()
-        lower.append(p)
-
-    upper = []
-    for p in reversed(pts):
-        while len(upper) >= 2 and cross(upper[-2], upper[-1], p) <= 0:
-            upper.pop()
-        upper.append(p)
-
-    # последняя точка каждого списка — дубликат первой другой части
-    return lower[:-1] + upper[:-1]
-
-def restore_order(points):
-    # тот же порядок, что и в solution.py:
-    # базовая точка — минимальный (y, затем x), сортировка остальных по atan2
-    base = min(points, key=lambda p: (p[1], p[0]))
-    bx, by = base
-    others = [p for p in points if p != base]
-    others.sort(key=lambda p: math.atan2(p[1] - by, p[0] - bx))
-    return [base] + others
 
 def polygon_area2(poly):
-    # удвоенная площадь по формуле Гаусса
     n = len(poly)
     s = 0
     for i in range(n):
@@ -48,94 +17,207 @@ def polygon_area2(poly):
         s += x1 * y2 - x2 * y1
     return abs(s)
 
+
+
 def boundary_points(poly):
-    # B = сумма gcd(|dx|, |dy|) по рёбрам
     n = len(poly)
-    B = 0
+    b = 0
     for i in range(n):
         x1, y1 = poly[i]
         x2, y2 = poly[(i + 1) % n]
         dx = abs(x2 - x1)
         dy = abs(y2 - y1)
-        B += math.gcd(dx, dy)
-    return B
+        b += math.gcd(dx, dy)
+    return b
 
-def generate_convex_polygon(n, rnd, coord_limit=10**6):
-    # генерируем много точек, берём выпуклую оболочку, пока размер оболочки = n
-    # чтобы не зациклиться, позволим hull иметь >= n и возьмём подмножество
-    while True:
-        m = max(n + 5, n * 2)
-        pts = []
-        for _ in range(m):
-            x = rnd.randint(-coord_limit, coord_limit)
-            y = rnd.randint(-coord_limit, coord_limit)
-            pts.append((x, y))
 
-        hull = convex_hull(pts)
-        if len(hull) < n:
+
+def restore_order(points):
+    base = min(points, key=lambda p: (p[1], p[0]))
+    bx, by = base
+    others = [p for p in points if p != base]
+    others.sort(key=lambda p: math.atan2(p[1] - by, p[0] - bx))
+    return [base] + others
+
+
+
+def make_convex_polygon(n, coord_limit):
+    angles = []
+    for _ in range(n):
+        angles.append(rnd.random() * 2.0 * math.pi)
+    angles.sort()
+
+    pts = []
+    min_gap = max(5.0, coord_limit * 0.002)
+    max_gap = max(min_gap + 5.0, coord_limit * 0.01)
+
+    for ang in angles:
+        radius = rnd.uniform(coord_limit * 0.7, coord_limit)
+        x = int(round(radius * math.cos(ang)))
+        y = int(round(radius * math.sin(ang)))
+        pts.append((x, y))
+
+    uniq = []
+    used = set()
+    for p in pts:
+        if p not in used:
+            uniq.append(p)
+            used.add(p)
+
+    if len(uniq) < 3:
+        uniq = [(0, 0), (coord_limit, 0), (0, coord_limit)]
+
+    poly = restore_order(uniq)
+
+    filtered = []
+    for p in poly:
+        if not filtered:
+            filtered.append(p)
             continue
-        if len(hull) > n:
-            # берём равномерно распределённые по контуру n точек
-            step = len(hull) / n
-            new_hull = []
-            cur = 0.0
-            for _ in range(n):
-                new_hull.append(hull[int(cur)])
-                cur += step
-            hull = new_hull
+        dx = p[0] - filtered[-1][0]
+        dy = p[1] - filtered[-1][1]
+        if dx * dx + dy * dy > 0:
+            filtered.append(p)
 
-        # проверяем ненулевую площадь
-        if polygon_area2(hull) > 0:
-            return hull
+    if len(filtered) >= 2 and filtered[0] == filtered[-1]:
+        filtered.pop()
+
+    poly = filtered
+
+    if len(poly) < 3 or polygon_area2(poly) == 0:
+        poly = []
+        for i in range(n):
+            ang = 2.0 * math.pi * i / n
+            radius = coord_limit * (0.8 + 0.15 * math.sin(3 * ang))
+            x = int(round(radius * math.cos(ang)))
+            y = int(round(radius * math.sin(ang)))
+            poly.append((x, y))
+        poly = restore_order(list(dict.fromkeys(poly)))
+
+    if len(poly) < 3 or polygon_area2(poly) == 0:
+        poly = [(0, 0), (coord_limit, 0), (0, coord_limit)]
+
+    return poly
+
+
+
+def predefined_tests():
+    return [
+        [(0, 0), (3, 0), (3, 2)],
+        [(0, 0), (4, 0), (4, 3), (0, 3)],
+        [(0, 0), (2, 0), (3, 1), (1, 3), (-1, 2)],
+    ]
+
+
+
+def easy_polygon(idx):
+    kind = idx % 3
+    if kind == 0:
+        n = rnd.randint(3, 6)
+        return make_convex_polygon(n, coord_limit=20)
+    if kind == 1:
+        n = rnd.randint(3, 10)
+        return make_convex_polygon(n, coord_limit=50)
+    n = rnd.randint(3, 8)
+    return make_convex_polygon(n, coord_limit=30)
+
+
+
+def medium_polygon(idx):
+    kind = idx % 4
+    if kind == 0:
+        n = rnd.randint(20, 60)
+        return make_convex_polygon(n, coord_limit=500)
+    if kind == 1:
+        n = rnd.randint(40, 120)
+        return make_convex_polygon(n, coord_limit=2000)
+    if kind == 2:
+        n = rnd.randint(60, 200)
+        return make_convex_polygon(n, coord_limit=10000)
+    n = rnd.randint(30, 100)
+    return make_convex_polygon(n, coord_limit=3000)
+
+
+
+def hard_polygon(idx):
+    kind = idx % 5
+    if kind == 0:
+        n = rnd.randint(2000, 4000)
+        return make_convex_polygon(n, coord_limit=10**6)
+    if kind == 1:
+        n = rnd.randint(4000, 8000)
+        return make_convex_polygon(n, coord_limit=10**7)
+    if kind == 2:
+        n = rnd.randint(8000, 15000)
+        return make_convex_polygon(n, coord_limit=10**8)
+    if kind == 3:
+        n = rnd.randint(15000, 25000)
+        return make_convex_polygon(n, coord_limit=10**9)
+    n = rnd.randint(5000, 12000)
+    return make_convex_polygon(n, coord_limit=10**8)
+
+
+
+def write_test(test_id, poly, out_path):
+    ordered = restore_order(poly)
+    double_area = polygon_area2(ordered)
+    s = double_area // 2
+    b = boundary_points(ordered)
+    i = (double_area - b + 2) // 2
+
+    shuffled = ordered[:]
+    rnd.shuffle(shuffled)
+
+    with open(out_path / f"{test_id}.in", "w", encoding="utf-8") as fin:
+        fin.write(str(len(shuffled)) + "\n")
+        for x, y in shuffled:
+            fin.write(f"{x} {y}\n")
+
+    with open(out_path / f"{test_id}.out", "w", encoding="utf-8") as fout:
+        fout.write(f"{s} {i}")
+
+
+
+def generate_tests(easy_count, medium_count, hard_count, out_path):
+    out_path.mkdir(parents=True, exist_ok=True)
+    test_id = 1
+
+    base = predefined_tests()
+    for poly in base[:easy_count]:
+        write_test(test_id, poly, out_path)
+        test_id += 1
+
+    generated_easy = max(0, easy_count - min(easy_count, len(base)))
+    for i in range(generated_easy):
+        write_test(test_id, easy_polygon(i), out_path)
+        test_id += 1
+
+    for i in range(medium_count):
+        write_test(test_id, medium_polygon(i), out_path)
+        test_id += 1
+
+    for i in range(hard_count):
+        write_test(test_id, hard_polygon(i), out_path)
+        test_id += 1
+
+
 
 def main():
-    if len(sys.argv) < 3:
-        print("Usage: generate_tests.py <count> <dir>")
-        return
+    if len(sys.argv) != 5:
+        print("Использование: python generate_barrier_tests_levels.py <easy_count> <medium_count> <hard_count> <out_dir>")
+        sys.exit(1)
 
-    t = int(sys.argv[1])
-    out_dir = sys.argv[2]
-    os.makedirs(out_dir, exist_ok=True)
+    easy_count = int(sys.argv[1])
+    medium_count = int(sys.argv[2])
+    hard_count = int(sys.argv[3])
+    out_path = Path(sys.argv[4])
 
-    rnd = random.Random(987654)
+    if easy_count < 0 or medium_count < 0 or hard_count < 0:
+        print("Количество тестов должно быть неотрицательным")
+        sys.exit(1)
 
-    for test_id in range(1, t + 1):
-        # размер многоугольника
-        if test_id == 1:
-            n = 3
-        elif test_id == 2:
-            n = 4
-        elif test_id <= 5:
-            n = rnd.randint(3, 10)
-        elif test_id <= 10:
-            n = rnd.randint(10, 50)
-        else:
-            n = rnd.randint(50, 2000)
+    generate_tests(easy_count, medium_count, hard_count, out_path)
 
-        poly = generate_convex_polygon(n, rnd)
-
-        # приводим порядок к тому же, что в solution.py
-        ordered = restore_order(poly)
-
-        double_area = polygon_area2(ordered)
-        S = double_area // 2
-        B = boundary_points(ordered)
-        I = (double_area - B + 2) // 2
-
-        # во входе вершины перемешаны
-        shuffled = ordered[:]
-        rnd.shuffle(shuffled)
-
-        in_path = os.path.join(out_dir, f"{test_id}.in")
-        out_path = os.path.join(out_dir, f"{test_id}.out")
-
-        with open(in_path, "w") as fin:
-            fin.write(str(n) + "\n")
-            for x, y in shuffled:
-                fin.write(f"{x} {y}\n")
-
-        with open(out_path, "w") as fout:
-            fout.write(f"{S} {I}")
 
 if __name__ == "__main__":
     main()
